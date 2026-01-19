@@ -27,7 +27,7 @@ def call_gemini(current_api_key, system_instruction, user_content, media_files=N
     if not current_api_key: return "API Key缺失。"
     try:
         genai.configure(api_key=current_api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash', system_instruction=system_instruction)
+        model = genai.GenerativeModel('gemini-2.5-pro', system_instruction=system_instruction)
         content_parts = [user_content]
         if media_files:
             for media in media_files:
