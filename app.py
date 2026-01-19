@@ -6,7 +6,7 @@ from datetime import datetime
 
 # --- 配置页面 ---
 st.set_page_config(
-    page_title="AI 视频提示词生成助手",
+    page_title="图生视频提示词助手",
     page_icon="🎬",
     layout="wide"
 )
@@ -60,16 +60,16 @@ with tab1:
             market = st.selectbox("投放市场 (必填)", ["美国 (US)", "英国 (UK)", "东南亚", "欧洲其他", "全球"], index=0)
             product_name = st.text_input("商品名称 (必填)")
             selling_points = st.text_area("商品卖点 (必填)", height=100)
-            copywriting = st.text_area("相关文案 (选填)", height=68)
+            copywriting = st.text_area("视频文案 (选填)", height=68)
             prompt_count = st.slider("生成 Prompt 条数", 1, 5, 3)
 
         with col2:
-            st.markdown("#### 2. 附件与工具")
+            st.markdown("#### 2. 附件")
             uploaded_image = st.file_uploader("上传商品图片 (必填★)", type=["jpg", "png", "jpeg"])
             uploaded_video = st.file_uploader("上传参考视频 (选填☆)", type=["mp4", "mov"])
             
             st.markdown("---")
-            st.markdown("**选择细分工具：**")
+            st.markdown("**选择工具：**")
             tool_type = st.radio(
                 "工具类型",
                 ("1、图生视频 (Image-to-Video)", "2、图生 Clip (Image-to-Clip)", "3、视频模仿 (Video Mimic)"),
@@ -102,17 +102,64 @@ with tab1:
                 if "图生视频" in tool_type:
                     # [标识 1] 图生视频 - 提示词配置
                     system_instruction = """
-                    👉 【在此处粘贴您的 System Prompt / 角色设定】
+                   # Role / 角色设定
+你是一位精通 **Image-to-Video (图生视频)** 的 AI 导演。
+你的核心能力是 **Visual Style Transfer (视觉风格迁移)**：你能够精准拆解【参考视频】的镜头语言和氛围，并将其转化为文字指令，应用在【商品图片】的动态生成中。
                     """
                     user_prompt = f"""
-                    👉 【在此处粘贴您的 User Prompt】
-                    (提示：可以使用变量，例如：商品是 {product_name}，卖点是 {selling_points}，需要生成 {prompt_count} 条)
+# Goal / 目标
+编写一段 **12秒** 的英文视频提示词。
+**核心要求**：提示词必须强制下游视频模型（如 Runway/Kling）**使用提供的商品图片作为起始帧**，并模仿**参考视频的运镜和节奏**进行生成。
+
+# Input Variables / 输入变量
+### 👁️ 视觉输入 (Visual Inputs)
+- **商品图片 (Product Image)**: [作为视频生成的主体/首帧]
+- **参考视频 (Reference Video)**: [作为风格、运镜、节奏的模仿对象]
+
+### 📝 文本输入 (Text Context)
+- **商品名称**: {{product_name}}
+- **投放市场**: {{target_market}}
+- **商品卖点**: {{selling_points}}
+- **需求条数**: {{quantity}}
+- **时长**: **Fixed 12 Seconds** (固定12秒)
+
+# Constraints & Standards / 核心规则
+1.  **内容一致性 (Content Consistency)**:
+    - **必须**使用 *"the product in the provided start frame image"* 指代主体。
+    - **严禁**描述产品的具体外观（因为模型会直接读取图片），而是专注于描述动作。
+    - 必须包含指令：*"Strictly animate the provided image."*
+2.  **风格复刻 (Style Cloning)**:
+    - 你必须分析【参考视频】的：**运镜方式** (Zoom/Pan/Tilt/Tracking)、**光影氛围** (Lighting/Mood)、**剪辑节奏** (Pacing)。
+    - 将这些风格关键词写入 Prompt 中。
+3.  **12s 叙事结构**:
+    - 将参考视频的节奏映射到 12秒 的时间轴上。
+
+# Workflow / 工作流程
+1.  **WATCH REFERENCE**: 观看参考视频，提取其“导演风格”（例如：是快节奏剪辑？还是缓慢推拉？是赛博朋克风？还是极简自然光？）。
+2.  **APPLY TO PRODUCT**: 构思如何让“商品图片”中的物体，在该风格下运动。
+3.  **WRITE PROMPT**: 输出包含强制一致性指令的英文提示词。
+
+# Output Format / 输出格式
+请严格按照以下格式输出：
+
+## 方案 [序号]：[基于参考视频的风格命名]
+- **🎥 参考风格分析 (CN)**：[简述你从参考视频中提取的运镜和氛围，如：'参考视频使用了快速推拉镜头和霓虹灯光效']
+- **🎬 12秒 动态构思 (CN)**：[简述新商品将如何复刻这个动作]
+- **🚀 AI 提示词 (English)**：
+> **Strictly animate the provided product image. Vertical 9:16, 12 seconds duration.**
+> **[风格关键词 / Camera & Lighting from Reference].**
+> **[0-4s]** The product in the provided image [Action matching the reference video's intro]...
+> **[4-8s]** [Action matching reference middle section]...
+> **[8-12s]** [Action matching reference outro]...
+> **Maintain 100% fidelity to the source image specifics.**
+
+---
                     """
                 
                 elif "图生 Clip" in tool_type:
                     # [标识 2] 图生 Clip - 提示词配置
                     system_instruction = """
-                    👉 【在此处粘贴您的 System Prompt / 角色设定】
+                   
                     """
                     user_prompt = f"""
                     👉 【在此处粘贴您的 User Prompt】
