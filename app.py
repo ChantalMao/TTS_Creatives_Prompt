@@ -6,7 +6,7 @@ from datetime import datetime
 
 # --- 页面配置 ---
 st.set_page_config(
-    page_title="图生视频提示词工坊",
+    page_title="提示词工坊",
     page_icon="🎬",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -137,7 +137,7 @@ if st.session_state.page_mode == "home":
     with col3:
         st.subheader("🎥视频模仿")
         st.caption("Video Mimic")
-        st.info("适合：参考已有视频的运镜和节奏，进行风格迁移。")
+        st.info("适合：参考已有视频脚本，进行复制")
         if st.button("开始使用", key="btn_tool_3"):
             st.session_state.selected_tool = "视频模仿"
             st.session_state.page_mode = "form"
