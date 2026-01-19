@@ -111,7 +111,7 @@ with st.sidebar:
 
 # --- 场景 1: 首页 (工具选择) ---
 if st.session_state.page_mode == "home":
-    st.header("请选择工具")
+    st.header("提示词生成工具")
     st.markdown("---")
     
     col1, col2, col3 = st.columns(3)
