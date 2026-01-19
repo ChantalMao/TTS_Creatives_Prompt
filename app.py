@@ -4,33 +4,43 @@ from PIL import Image
 import time
 from datetime import datetime
 
-# --- 配置页面 ---
+# --- 页面配置 ---
 st.set_page_config(
-    page_title="图生视频提示词助手",
+    page_title="AI 视频提示词工坊",
     page_icon="🎬",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# --- API Key 配置 (Streamlit Secrets) ---
+# --- API Key 校验 ---
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
 except (FileNotFoundError, KeyError):
-    st.error("🚨 未检测到 Google API Key。请在 Streamlit Cloud Secrets 中配置 `GOOGLE_API_KEY`。")
+    st.error("🚨 请在 Streamlit Cloud Secrets 中配置 `GOOGLE_API_KEY`。")
     st.stop()
 
 # --- 状态初始化 ---
+# page_mode: 'home' (首页), 'form' (填写页), 'detail' (详情页)
+if "page_mode" not in st.session_state:
+    st.session_state.page_mode = "home"
+if "selected_tool" not in st.session_state:
+    st.session_state.selected_tool = None
 if "history" not in st.session_state:
-    st.session_state["history"] = []
+    st.session_state.history = []
+if "current_task_id" not in st.session_state:
+    st.session_state.current_task_id = None
 
-# --- Gemini 调用封装 ---
+# --- 工具函数：Gemini 调用 ---
 def call_gemini(current_api_key, system_instruction, user_content, media_files=None, chat_history=None):
     if not current_api_key: return "API Key缺失。"
     try:
         genai.configure(api_key=current_api_key)
         model = genai.GenerativeModel('gemini-2.5-pro', system_instruction=system_instruction)
+        
         content_parts = [user_content]
         if media_files:
             for media in media_files:
+                # 简单的图片处理，如果是视频文件流，实际生产需走 File API，这里做兼容处理
                 content_parts.append(media)
         
         if chat_history:
@@ -43,254 +53,278 @@ def call_gemini(current_api_key, system_instruction, user_content, media_files=N
     except Exception as e:
         return f"API Error: {str(e)}"
 
-# --- 主页面 Tabs ---
-tab1, tab2 = st.tabs(["🚀 立即生成", "📝 历史记录与优化"])
+# --- 工具函数：生成任务名称 ---
+def generate_task_name(tool_name):
+    # 映射工具名到前缀
+    prefix_map = {
+        "图生视频": "图生视频",
+        "图生Clip": "图生Clip",
+        "视频模仿": "视频模仿"
+    }
+    prefix = prefix_map.get(tool_name, "任务")
+    
+    # 获取日期 (MMDD)
+    date_str = datetime.now().strftime("%m%d")
+    
+    # 计算当日序号
+    # 筛选出同名且同日期的任务
+    base_name = f"{prefix}{date_str}"
+    count = 0
+    for task in st.session_state.history:
+        if task['name'].startswith(base_name):
+            count += 1
+    
+    # 序号两位数
+    seq = f"{count + 1:02d}"
+    return f"{base_name}{seq}"
 
 # ==========================================
-# TAB 1: 生成工作台
+# 侧边栏布局
 # ==========================================
-with tab1:
-    # 已移除使用说明 Expander
+with st.sidebar:
+    st.title("🎬 工作台")
+    
+    # 1. 新建任务按钮 (上半部分)
+    if st.button("➕ 新建任务", use_container_width=True, type="primary"):
+        st.session_state.page_mode = "home"
+        st.session_state.current_task_id = None
+        st.rerun()
 
-    with st.form("generation_form"):
-        col1, col2 = st.columns([1, 1])
-        
-        with col1:
-            st.markdown("#### 1. 基础信息")
-            market = st.selectbox("投放市场 (必填)", ["美国 (US)", "英国 (UK)", "东南亚", "欧洲其他", "全球"], index=0)
-            product_name = st.text_input("商品名称 (必填)")
-            selling_points = st.text_area("商品卖点 (必填)", height=100)
-            copywriting = st.text_area("视频文案 (选填)", height=68)
-            prompt_count = st.slider("生成 Prompt 条数", 1, 5, 3)
-
-        with col2:
-            st.markdown("#### 2. 附件")
-            uploaded_image = st.file_uploader("上传商品图片 (必填★)", type=["jpg", "png", "jpeg"])
-            uploaded_video = st.file_uploader("上传参考视频 (选填☆)", type=["mp4", "mov"])
-            
-            st.markdown("---")
-            st.markdown("**选择工具：**")
-            tool_type = st.radio(
-                "工具类型",
-                ("1、图生视频 (Image-to-Video)", "2、图生 Clip (Image-to-Clip)", "3、视频模仿 (Video Mimic)"),
-                label_visibility="collapsed"
-            )
-
-        submit_btn = st.form_submit_button("✨ 点击立即生成", use_container_width=True)
-
-    if submit_btn:
-        if not product_name or not selling_points:
-            st.error("⚠️ 请填写完整的【商品名称】和【商品卖点】！")
-        elif not uploaded_image:
-             st.error("⚠️ 请上传【商品图片】（必填项）！")
-        else:
-            with st.spinner("正在生成中..."):
-                # 处理图片
-                image_part = Image.open(uploaded_image)
-                media_list = [image_part]
-                
-                # 预处理变量（您可以在下方的 prompt 字符串中直接使用 f-string 引用这些变量）
-                # 可用变量：{market}, {product_name}, {selling_points}, {copywriting}, {prompt_count}
-                
-                system_instruction = ""
-                user_prompt = ""
-
-                # =========================================================
-                # 👇👇👇 请在此处填入您准备好的提示词 👇👇👇
-                # =========================================================
-
-                if "图生视频" in tool_type:
-                    # [标识 1] 图生视频 - 提示词配置
-                    system_instruction = """
-                   # Role / 角色设定
-你是一位精通 **Image-to-Video (图生视频)** 的 AI 导演。
-你的核心能力是 **Visual Style Transfer (视觉风格迁移)**：你能够精准拆解【参考视频】的镜头语言和氛围，并将其转化为文字指令，应用在【商品图片】的动态生成中。
-                    """
-                    user_prompt = f"""
-# Goal / 目标
-编写一段 **12秒** 的英文视频提示词。
-**核心要求**：提示词必须强制下游视频模型（如 Runway/Kling）**使用提供的商品图片作为起始帧**，并模仿**参考视频的运镜和节奏**进行生成。
-
-# Input Variables / 输入变量
-### 👁️ 视觉输入 (Visual Inputs)
-- **商品图片 (Product Image)**: [作为视频生成的主体/首帧]
-- **参考视频 (Reference Video)**: [作为风格、运镜、节奏的模仿对象]
-
-### 📝 文本输入 (Text Context)
-- **商品名称**: {{product_name}}
-- **投放市场**: {{target_market}}
-- **商品卖点**: {{selling_points}}
-- **需求条数**: {{quantity}}
-- **时长**: **Fixed 12 Seconds** (固定12秒)
-
-# Constraints & Standards / 核心规则
-1.  **内容一致性 (Content Consistency)**:
-    - **必须**使用 *"the product in the provided start frame image"* 指代主体。
-    - **严禁**描述产品的具体外观（因为模型会直接读取图片），而是专注于描述动作。
-    - 必须包含指令：*"Strictly animate the provided image."*
-2.  **风格复刻 (Style Cloning)**:
-    - 你必须分析【参考视频】的：**运镜方式** (Zoom/Pan/Tilt/Tracking)、**光影氛围** (Lighting/Mood)、**剪辑节奏** (Pacing)。
-    - 将这些风格关键词写入 Prompt 中。
-3.  **12s 叙事结构**:
-    - 将参考视频的节奏映射到 12秒 的时间轴上。
-
-# Workflow / 工作流程
-1.  **WATCH REFERENCE**: 观看参考视频，提取其“导演风格”（例如：是快节奏剪辑？还是缓慢推拉？是赛博朋克风？还是极简自然光？）。
-2.  **APPLY TO PRODUCT**: 构思如何让“商品图片”中的物体，在该风格下运动。
-3.  **WRITE PROMPT**: 输出包含强制一致性指令的英文提示词。
-
-# Output Format / 输出格式
-请严格按照以下格式输出：
-
-## 方案 [序号]：[基于参考视频的风格命名]
-- **🎥 参考风格分析 (CN)**：[简述你从参考视频中提取的运镜和氛围，如：'参考视频使用了快速推拉镜头和霓虹灯光效']
-- **🎬 12秒 动态构思 (CN)**：[简述新商品将如何复刻这个动作]
-- **🚀 AI 提示词 (English)**：
-> **Strictly animate the provided product image. Vertical 9:16, 12 seconds duration.**
-> **[风格关键词 / Camera & Lighting from Reference].**
-> **[0-4s]** The product in the provided image [Action matching the reference video's intro]...
-> **[4-8s]** [Action matching reference middle section]...
-> **[8-12s]** [Action matching reference outro]...
-> **Maintain 100% fidelity to the source image specifics.**
-
----
-                    """
-                
-                elif "图生 Clip" in tool_type:
-                    # [标识 2] 图生 Clip - 提示词配置
-                    system_instruction = """
-                   
-                    """
-                    user_prompt = f"""
-                    👉 【在此处粘贴您的 User Prompt】
-                    """
-                
-                elif "视频模仿" in tool_type:
-                    # [标识 3] 视频模仿 - 提示词配置
-                    # 提示：如果用户没传视频，uploaded_video 为 None
-                    video_status = "已提供参考视频" if uploaded_video else "未提供参考视频，请自由发挥"
-                    
-                    system_instruction = """
-                    # Role / 角色设定
-你是一位精通 **Image-to-Video (图生视频)** 技术的提示词专家。你的任务是为下游的 AI 视频模型编写提示词。下游模型将同时接收：1. **一张商品图片**；2. **你生成的提示词**。
-                    """
-                    user_prompt = f"""
-                # Role / 角色设定
-你是一位擅长 **Video Remake (视频复刻)** 的 AI 导演。你的核心能力是“剧本拆解”：你能够精准识别参考视频中的**人物、动作、环境剧情**，并将其复刻出来，同时将画面中的核心道具替换为用户提供的**商品图片**。
-
-# Goal / 目标
-编写一段 **12秒** 的英文视频提示词。
-**核心要求**：
-1.  **复刻剧本**：提示词必须详细描述参考视频中的具体画面内容（如：谁在做什么？在哪里？发生了什么？）。
-2.  **替换商品**：将参考视频中的互动道具，替换为**提供的商品图片**，并强制保持商品外观一致。
-
-# Input Variables / 输入变量
-### 👁️ 视觉输入
-- **商品图片 (Product Image)**: [新道具/新主角]
-- **参考视频 (Reference Video)**: [剧本来源]
-
-### 📝 文本输入
-- **商品名称**: {{product_name}}
-- **投放市场**: {{target_market}}
-- **商品卖点**: {{selling_points}}
-- **时长**: **Fixed 12 Seconds**
-
-# Constraints & Standards / 核心规则
-1.  **剧本拆解 (Script Deconstruction)**:
-    - **禁止**只写运镜（如 "Panning shot"）。
-    - **必须**描述主体内容（如 "A young woman running on green grass," "A hand pouring water," "A cat jumping on a sofa"）。
-2.  **实体替换 (Entity Substitution)**:
-    - 识别参考视频中的焦点物体，并在 Prompt 中用 *"the product in the provided start frame image"* 进行替换。
-    - *例子：如果参考视频是“人喝水”，新商品是“果汁”，Prompt 应描述“人拿着【图片中的果汁】喝”。*
-3.  **强制一致性**:
-    - 包含指令：*"Strictly animate the provided image."*
-
-# Workflow / 工作流程
-1.  **DECONSTRUCT REFERENCE**: 像写小说一样，把参考视频的 0-12s 画面描述出来（人物、动作、背景）。
-2.  **SWAP OBJECT**: 将描述中的原道具替换为新商品。
-3.  **WRITE PROMPT**: 输出包含丰富细节的英文 Prompt。
-
-# Output Format / 输出格式
-请严格按照以下格式输出：
-
-## 剧本复刻方案：[场景标题]
-- **🎬 参考视频剧本拆解 (CN)**：[详细描述参考视频的内容。例如：一位穿着运动装的女士在阳光下的草地上奔跑，镜头特写她脚上的鞋子，背景是模糊的公园树木。]
-- **🔄 新视频构思 (CN)**：[说明如何将新商品植入上述剧情]
-- **🚀 AI 提示词 (English)**：
-> **Strictly animate the provided product image into the following scene. Vertical 9:16, 12 seconds.**
-> **[0-4s]** [Detailed description of Actor + Environment from reference] interacting with **the product in the provided image**. [Specific Action].
-> **[4-8s]** [Action continues]...
-> **[8-12s]** [Conclusion action]...
-> **Style tags: [Visual Style from reference], 4k, hyper-realistic.**
-> **Maintain 100% visual fidelity to the provided product image.**
-
----
-                    (当前视频状态：{video_status})
-                    """
-
-                # =========================================================
-                # 👆👆👆 提示词配置结束 👆👆👆
-                # =========================================================
-
-                # 调用 API
-                result_text = call_gemini(api_key, system_instruction, user_prompt, media_list)
-
-                # 保存历史
-                initial_chat_history = [
-                    {"role": "user", "parts": [f"[图片上下文] {user_prompt}"]},
-                    {"role": "model", "parts": [result_text]}
-                ]
-
-                new_record = {
-                    "id": str(int(time.time())),
-                    "timestamp": datetime.now().strftime("%m-%d %H:%M"),
-                    "tool": tool_type.split(' ')[0],
-                    "product": product_name,
-                    "inputs_summary": f"卖点：{selling_points[:30]}...",
-                    "chat_history": initial_chat_history,
-                    "system_instruction": system_instruction
-                }
-                st.session_state.history.insert(0, new_record) 
-                
-                st.success("✅ 生成完成！")
-                st.markdown("### 结果预览：")
-                st.write(result_text)
-
-# ==========================================
-# TAB 2: 历史记录与优化
-# ==========================================
-with tab2:
-    st.subheader("📜 生成记录与对话式优化")
+    st.divider()
+    
+    # 2. 历史记录列表 (下半部分)
+    st.subheader("📜 历史任务")
     
     if not st.session_state.history:
-        st.info("暂无记录。")
+        st.caption("暂无历史记录")
     
-    for record in st.session_state.history:
-        with st.expander(f"[{record['timestamp']}] {record['tool']} | {record['product']}"):
-            col_a, col_b = st.columns([1, 2])
-            with col_a:
-                st.markdown("**原始需求摘要**")
-                st.caption(record['inputs_summary'])
-                st.divider()
-                st.info("在右侧对话框可进行修改")
-            
-            with col_b:
-                chat_container = st.container(height=500)
-                for msg in record['chat_history']:
-                    with chat_container.chat_message(msg['role']):
-                        if msg['role'] == 'user' and "[图片上下文]" in msg['parts'][0]:
-                             with st.expander("查看初始请求", expanded=False): st.write(msg['parts'][0])
-                        else:
-                            st.markdown(msg['parts'][0])
+    for task in st.session_state.history:
+        # 点击历史任务，进入详情页
+        if st.button(f"{task['name']}", key=f"btn_{task['id']}", use_container_width=True):
+            st.session_state.current_task_id = task['id']
+            st.session_state.page_mode = "detail"
+            st.rerun()
 
-                if prompt := st.chat_input(f"修改指令...", key=f"chat_{record['id']}"):
-                    with chat_container.chat_message("user"): st.markdown(prompt)
-                    
-                    with chat_container.chat_message("model"):
-                        with st.spinner("修改中..."):
-                            resp = call_gemini(api_key, record['system_instruction'], prompt, None, record['chat_history'])
-                            st.markdown(resp)
-                    
-                    record['chat_history'].append({"role": "user", "parts": [prompt]})
-                    record['chat_history'].append({"role": "model", "parts": [resp]})
-                    st.rerun()
+# ==========================================
+# 主页面逻辑路由
+# ==========================================
+
+# --- 场景 1: 首页 (工具选择) ---
+if st.session_state.page_mode == "home":
+    st.header("👋 请选择创作工具")
+    st.markdown("---")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.subheader("🖼️ 图生视频")
+        st.caption("Image-to-Video")
+        st.info("适合：由静图生成动态视频，强调光影与质感。")
+        if st.button("开始使用", key="btn_tool_1"):
+            st.session_state.selected_tool = "图生视频"
+            st.session_state.page_mode = "form"
+            st.rerun()
+            
+    with col2:
+        st.subheader("⚡️ 图生Clip")
+        st.caption("Image-to-Clip")
+        st.info("适合：生成短促、吸睛的社交媒体短片(Hook/CTA)。")
+        if st.button("开始使用", key="btn_tool_2"):
+            st.session_state.selected_tool = "图生Clip"
+            st.session_state.page_mode = "form"
+            st.rerun()
+            
+    with col3:
+        st.subheader("🎥 视频模仿")
+        st.caption("Video Mimic")
+        st.info("适合：参考已有视频的运镜和节奏，进行风格迁移。")
+        if st.button("开始使用", key="btn_tool_3"):
+            st.session_state.selected_tool = "视频模仿"
+            st.session_state.page_mode = "form"
+            st.rerun()
+
+# --- 场景 2: 信息提交表单 ---
+elif st.session_state.page_mode == "form":
+    tool = st.session_state.selected_tool
+    st.button("← 返回首页", on_click=lambda: st.session_state.update(page_mode="home"))
+    st.header(f"🛠️ {tool} - 配置参数")
+    st.divider()
+    
+    with st.form("task_form"):
+        # 公共变量初始化
+        media_list = []
+        user_prompt = ""
+        system_instruction = ""
+        
+        # === 1. 图生视频 表单 ===
+        if tool == "图生视频":
+            col1, col2 = st.columns(2)
+            with col1:
+                market = st.selectbox("投放市场 (必填)", ["美国", "英国", "东南亚", "全球"], index=0)
+                product_name = st.text_input("商品名称 (必填)")
+                selling_points = st.text_area("商品卖点 (必填)")
+                prompt_count = st.slider("需要的提示词条数", 1, 5, 3)
+            with col2:
+                copywriting = st.text_area("文案 (选填)")
+                uploaded_img = st.file_uploader("商品图片 (选填，建议上传)", type=["jpg", "png", "jpeg"])
+                uploaded_video = st.file_uploader("参考视频 (选填)", type=["mp4", "mov"])
+
+            # 提示词构建逻辑
+            if st.form_submit_button("🚀 立即生成"):
+                if not market or not product_name or not selling_points:
+                    st.error("请填写必填项！")
+                    st.stop()
+                
+                if uploaded_img:
+                    media_list.append(Image.open(uploaded_img))
+                
+                # [标识] 图生视频 Prompt
+                system_instruction = """
+                👉 【此处填入图生视频 System Prompt】
+                """
+                user_prompt = f"""
+                👉 【此处填入图生视频 User Prompt】
+                信息：市场-{market}, 商品-{product_name}, 卖点-{selling_points}, 文案-{copywriting}, 数量-{prompt_count}
+                """
+
+        # === 2. 图生Clip 表单 ===
+        elif tool == "图生Clip":
+            col1, col2 = st.columns(2)
+            with col1:
+                market = st.selectbox("投放市场 (必填)", ["美国", "英国", "东南亚", "全球"])
+                product_name = st.text_input("商品名称 (必填)")
+                selling_points = st.text_area("商品卖点 (必填)")
+            with col2:
+                prompt_count = st.slider("需要的提示词条数", 1, 5, 3)
+                scene_type = st.selectbox("生成场景 (必填)", ["钩子 (Hook)", "产品细节展示", "产品整体展示", "CTA (呼吁行动)"])
+                # Clip 通常必须有图，虽未强制但逻辑上需要
+                uploaded_img = st.file_uploader("商品图片 (建议上传)", type=["jpg", "png", "jpeg"])
+
+            if st.form_submit_button("🚀 立即生成"):
+                if not market or not product_name or not selling_points:
+                    st.error("请填写必填项！")
+                    st.stop()
+                
+                if uploaded_img:
+                    media_list.append(Image.open(uploaded_img))
+
+                # [标识] 图生Clip Prompt
+                system_instruction = """
+                👉 【此处填入图生Clip System Prompt】
+                """
+                user_prompt = f"""
+                👉 【此处填入图生Clip User Prompt】
+                信息：市场-{market}, 商品-{product_name}, 卖点-{selling_points}, 场景-{scene_type}, 数量-{prompt_count}
+                """
+
+        # === 3. 视频模仿 表单 ===
+        elif tool == "视频模仿":
+            col1, col2 = st.columns(2)
+            with col1:
+                market = st.selectbox("投放市场 (必填)", ["美国", "英国", "东南亚", "全球"])
+            with col2:
+                uploaded_video = st.file_uploader("参考视频 (必填)", type=["mp4", "mov"])
+            
+            if st.form_submit_button("🚀 立即生成"):
+                if not uploaded_video:
+                    st.error("视频模仿必须上传参考视频！")
+                    st.stop()
+                
+                # 注意：Streamlit 中视频文件处理较复杂，此处仅作逻辑占位，实际 Prompt 中仅能描述“已提供视频”
+                # 如果是 Gemini 1.5 Pro，可以尝试通过 File API 上传，此处简化处理
+                
+                # [标识] 视频模仿 Prompt
+                system_instruction = """
+                👉 【此处填入视频模仿 System Prompt】
+                """
+                user_prompt = f"""
+                👉 【此处填入视频模仿 User Prompt】
+                信息：市场-{market}, 参考视频已上传(请根据文件名或元数据进行风格分析)。
+                """
+
+        # === 执行生成 (通用逻辑) ===
+        # 注意：这里处于 form 提交后的缩进块内
+        if user_prompt: # 如果 user_prompt 被赋值了，说明校验通过
+            with st.spinner(f"正在使用 {tool} 生成中..."):
+                result_text = call_gemini(api_key, system_instruction, user_prompt, media_list)
+                
+                # 生成任务 ID 和 名称
+                task_id = str(int(time.time()))
+                task_name = generate_task_name(tool)
+                
+                # 保存到历史
+                new_task = {
+                    "id": task_id,
+                    "name": task_name,
+                    "tool": tool,
+                    "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "system_instruction": system_instruction,
+                    "chat_history": [
+                        {"role": "user", "parts": [f"【任务配置】\n{user_prompt}"]},
+                        {"role": "model", "parts": [result_text]}
+                    ]
+                }
+                
+                st.session_state.history.insert(0, new_task)
+                st.session_state.current_task_id = task_id
+                st.session_state.page_mode = "detail" # 跳转详情页
+                st.rerun()
+
+# --- 场景 3: 历史任务详情与对话 ---
+elif st.session_state.page_mode == "detail":
+    # 获取当前任务对象
+    current_task = next((t for t in st.session_state.history if t['id'] == st.session_state.current_task_id), None)
+    
+    if not current_task:
+        st.error("任务不存在")
+        st.button("返回首页", on_click=lambda: st.session_state.update(page_mode="home"))
+    else:
+        # 顶部导航栏
+        c1, c2 = st.columns([6, 1])
+        with c1:
+            st.title(f"📝 {current_task['name']}")
+            st.caption(f"创建时间: {current_task['date']} | 工具: {current_task['tool']}")
+        with c2:
+            if st.button("关闭", type="secondary"):
+                st.session_state.page_mode = "home"
+                st.rerun()
+        
+        st.divider()
+
+        # 聊天区域
+        chat_container = st.container(height=600)
+        
+        # 显示历史
+        for msg in current_task['chat_history']:
+            with chat_container.chat_message(msg['role']):
+                # 隐藏初始的大段 Prompt，只显示结果或简略信息
+                if msg['role'] == 'user' and "【任务配置】" in msg['parts'][0]:
+                    with st.expander("查看原始任务配置"):
+                        st.text(msg['parts'][0])
+                else:
+                    st.markdown(msg['parts'][0])
+        
+        # 输入框
+        if prompt := st.chat_input("对生成结果不满意？输入修改建议..."):
+            # 1. 显示用户输入
+            with chat_container.chat_message("user"):
+                st.markdown(prompt)
+            
+            # 2. 调用 API 修改
+            with chat_container.chat_message("model"):
+                with st.spinner("AI 正在修改..."):
+                    # 获取当前任务的上下文
+                    context_history = current_task['chat_history']
+                    response = call_gemini(
+                        api_key, 
+                        current_task['system_instruction'], 
+                        prompt, 
+                        None, # 修改阶段不重新传附件
+                        context_history
+                    )
+                    st.markdown(response)
+            
+            # 3. 更新历史数据
+            current_task['chat_history'].append({"role": "user", "parts": [prompt]})
+            current_task['chat_history'].append({"role": "model", "parts": [response]})
+            st.rerun()
