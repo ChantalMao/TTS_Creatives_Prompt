@@ -6,7 +6,7 @@ from datetime import datetime
 
 # --- 页面配置 ---
 st.set_page_config(
-    page_title="AI 视频提示词工坊",
+    page_title="图生视频提示词工坊",
     page_icon="🎬",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -82,10 +82,10 @@ def generate_task_name(tool_name):
 # 侧边栏布局
 # ==========================================
 with st.sidebar:
-    st.title("🎬 工作台")
+    st.title("工作台")
     
     # 1. 新建任务按钮 (上半部分)
-    if st.button("➕ 新建任务", use_container_width=True, type="primary"):
+    if st.button("+新建任务", use_container_width=True, type="primary"):
         st.session_state.page_mode = "home"
         st.session_state.current_task_id = None
         st.rerun()
@@ -93,7 +93,7 @@ with st.sidebar:
     st.divider()
     
     # 2. 历史记录列表 (下半部分)
-    st.subheader("📜 历史任务")
+    st.subheader("历史任务")
     
     if not st.session_state.history:
         st.caption("暂无历史记录")
@@ -111,31 +111,31 @@ with st.sidebar:
 
 # --- 场景 1: 首页 (工具选择) ---
 if st.session_state.page_mode == "home":
-    st.header("👋 请选择创作工具")
+    st.header("请选择工具")
     st.markdown("---")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.subheader("🖼️ 图生视频")
+        st.subheader("🖼️图生视频")
         st.caption("Image-to-Video")
-        st.info("适合：由静图生成动态视频，强调光影与质感。")
+        st.info("适合：生成12S的完整视频")
         if st.button("开始使用", key="btn_tool_1"):
             st.session_state.selected_tool = "图生视频"
             st.session_state.page_mode = "form"
             st.rerun()
             
     with col2:
-        st.subheader("⚡️ 图生Clip")
+        st.subheader("⚡️图生Clip")
         st.caption("Image-to-Clip")
-        st.info("适合：生成短促、吸睛的社交媒体短片(Hook/CTA)。")
+        st.info("适合：生成4S的视频片段")
         if st.button("开始使用", key="btn_tool_2"):
             st.session_state.selected_tool = "图生Clip"
             st.session_state.page_mode = "form"
             st.rerun()
             
     with col3:
-        st.subheader("🎥 视频模仿")
+        st.subheader("🎥视频模仿")
         st.caption("Video Mimic")
         st.info("适合：参考已有视频的运镜和节奏，进行风格迁移。")
         if st.button("开始使用", key="btn_tool_3"):
@@ -170,7 +170,7 @@ elif st.session_state.page_mode == "form":
                 uploaded_video = st.file_uploader("参考视频 (选填)", type=["mp4", "mov"])
 
             # 提示词构建逻辑
-            if st.form_submit_button("🚀 立即生成"):
+            if st.form_submit_button("立即生成"):
                 if not market or not product_name or not selling_points:
                     st.error("请填写必填项！")
                     st.stop()
@@ -200,7 +200,7 @@ elif st.session_state.page_mode == "form":
                 # Clip 通常必须有图，虽未强制但逻辑上需要
                 uploaded_img = st.file_uploader("商品图片 (建议上传)", type=["jpg", "png", "jpeg"])
 
-            if st.form_submit_button("🚀 立即生成"):
+            if st.form_submit_button("立即生成"):
                 if not market or not product_name or not selling_points:
                     st.error("请填写必填项！")
                     st.stop()
@@ -225,7 +225,7 @@ elif st.session_state.page_mode == "form":
             with col2:
                 uploaded_video = st.file_uploader("参考视频 (必填)", type=["mp4", "mov"])
             
-            if st.form_submit_button("🚀 立即生成"):
+            if st.form_submit_button("立即生成"):
                 if not uploaded_video:
                     st.error("视频模仿必须上传参考视频！")
                     st.stop()
