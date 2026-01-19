@@ -171,10 +171,48 @@ with tab1:
                     video_status = "已提供参考视频" if uploaded_video else "未提供参考视频，请自由发挥"
                     
                     system_instruction = """
-                    👉 【在此处粘贴您的 System Prompt / 角色设定】
+                    # Role / 角色设定
+你是一位精通 **Image-to-Video (图生视频)** 技术的提示词专家。你的任务是为下游的 AI 视频模型编写提示词。下游模型将同时接收：1. **一张商品图片**；2. **你生成的提示词**。
                     """
                     user_prompt = f"""
-                    👉 【在此处粘贴您的 User Prompt】
+                   # Goal / 目标
+根据参考视频的脚本结构，编写一段 12秒 的英文提示词，控制画面中的运动和剧情。
+**关键要求**：不需要在提示词中描述商品的外观（因为模型能看到图片），但必须在提示词中包含“强制保持与参考图片一致”的指令。
+
+# Input Variables / 输入变量
+- **参考视频附件/脚本**: {{reference_info}} (用于定义动作和运镜)
+- **商品卖点**: {{selling_points}}
+- **投放市场**: {{target_market}}
+- **时长**: **Fixed 12 Seconds**
+
+# Constraints & Standards / 核心规则
+1.  **引用式写作 (Referential Writing)**:
+    - 不要描述商品长什么样（颜色/形状）。
+    - 统一使用 *"the provided product image"* 或 *"the object in the reference image"* 来指代商品。
+    - 把重点放在**动作 (Action)**、**环境 (Environment)** 和 **运镜 (Camera Movement)** 上。
+2.  **强制一致性指令 (Consistency Command)**:
+    - 必须在 Prompt 的开头或结尾加入：*"Strictly maintain visual consistency with the provided start frame image."* 或 *"Animate the provided image directly."*
+3.  **12s 结构复刻**:
+    - 将参考视频的动作节奏映射到 [0-4s], [4-8s], [8-12s]。
+
+# Workflow / 工作流程
+1.  **分析脚本**：理解参考视频的动作流程。
+2.  **植入代词**：将动作的主体替换为“提供的图片中的商品”。
+3.  **生成 Prompt**：输出包含强制指令的英文 Prompt。
+
+# Output Format / 输出格式
+请直接输出一段完整的英文提示词，不要包含任何中文解释或分段标题，格式如下：
+
+> **[强制一致性指令]. [时长/画质设定]. [时间轴脚本描述].**
+
+---
+
+### Example Output Structure (Internal Logic):
+> "Strictly animate the provided product image. High quality video, 12 seconds.
+> [0-4s] The product in the image is placed on a table, camera pans right...
+> [4-8s] A hand enters frame and touches the product...
+> [8-12s] The product glows...
+> Maintain 100% fidelity to the source image."
                     (当前视频状态：{video_status})
                     """
 
