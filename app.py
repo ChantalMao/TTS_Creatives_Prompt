@@ -147,7 +147,7 @@ if st.session_state.page_mode == "home":
 elif st.session_state.page_mode == "form":
     tool = st.session_state.selected_tool
     st.button("← 返回首页", on_click=lambda: st.session_state.update(page_mode="home"))
-    st.header(f"🛠️ {tool} - 配置参数")
+    st.header(f"🛠️ {tool}")
     st.divider()
     
     with st.form("task_form"):
